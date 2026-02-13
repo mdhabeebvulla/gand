@@ -1,8 +1,6 @@
 ---
 rule_id: R001_FEHBP_MEMBER
-placeholders:
-  - Policy.PolicyState
-  - fehbp_address.MailingAddress
+placeholders: [Policy.PolicyState, fehbp_address.MailingAddress]
 ---
 
 For Federal Employees Health Benefit Program accounts in the state of {{Policy.PolicyState}}, Grievance and Appeal request must be sent in writing.

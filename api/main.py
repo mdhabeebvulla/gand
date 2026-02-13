@@ -20,10 +20,12 @@ from api.models import (
     HealthResponse, RuleSummary,
 )
 from api.chat import process_chat, process_evaluate
+from api import admin as admin_module
 from engine.rule_engine import RuleEngine
 from engine.message_resolver import MessageResolver
 from engine.context_extractor import ContextExtractor
 from engine.data_sources import DataSourceResolver
+from engine.bitbucket_client import BitbucketClient
 
 # ─── Load environment variables ───
 load_dotenv()
@@ -55,6 +57,18 @@ context_extractor = ContextExtractor(
 )
 data_resolver = DataSourceResolver(mode="mock")
 
+# ─── Bitbucket Client ───
+bb_client = BitbucketClient(
+    workspace=os.getenv("BB_WORKSPACE"),
+    repo_slug=os.getenv("BB_REPO_SLUG"),
+    username=os.getenv("BB_USERNAME"),
+    app_password=os.getenv("BB_APP_PASSWORD"),
+    branch=os.getenv("BB_BRANCH", "main"),
+)
+
+# ─── Initialize Admin Module ───
+admin_module.init(bb_client, rule_engine, message_resolver)
+
 # ─── FastAPI App ───
 app = FastAPI(
     title="G&A Rules Engine",
@@ -77,6 +91,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Include Admin API routes ───
+app.include_router(admin_module.router)
+
 
 # ═══════════════════════════════════════════
 # ROUTES
@@ -89,6 +106,15 @@ async def root():
     if index_path.exists():
         return HTMLResponse(content=index_path.read_text())
     return HTMLResponse(content="<h1>G&A Rules Engine</h1><p>Visit /docs for API documentation.</p>")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page():
+    """Serve the admin UI for editing rules and messages."""
+    admin_path = STATIC_DIR / "admin.html"
+    if admin_path.exists():
+        return HTMLResponse(content=admin_path.read_text())
+    return HTMLResponse(content="<h1>Admin page not found</h1>")
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -197,5 +223,9 @@ async def startup():
     logger.info(f"  Rules loaded: {len(rule_engine.rules)}")
     logger.info(f"  Messages loaded: {len(message_resolver.cache)}")
     logger.info(f"  OpenAI configured: {context_extractor.client is not None}")
+    logger.info(f"  Bitbucket configured: {bb_client.configured}")
     logger.info(f"  Mode: {data_resolver.mode}")
+    logger.info(f"  Chat UI:  http://localhost:8000/")
+    logger.info(f"  Admin UI: http://localhost:8000/admin")
+    logger.info(f"  API Docs: http://localhost:8000/docs")
     logger.info("=" * 60)
