@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&A Rules Engine — Chat</title>
+<style>
+:root { --bg:#0f172a; --surface:#1e293b; --surface2:#334155; --border:#475569; --text:#e2e8f0; --dim:#94a3b8; --teal:#0891b2; --mint:#06b6d4; --green:#10b981; --red:#ef4444; --orange:#f59e0b; --white:#fff; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:12px}
+header h1{font-size:18px;font-weight:600}
+header .tag{background:var(--teal);color:var(--white);font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+header .status{margin-left:auto;font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px}
+header .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+
+.chat-area{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+.msg{max-width:85%;padding:14px 18px;border-radius:14px;font-size:14px;line-height:1.6;animation:fadeIn .3s ease}
+.msg.user{background:var(--teal);color:var(--white);align-self:flex-end;border-bottom-right-radius:4px}
+.msg.bot{background:var(--surface);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px}
+.msg.bot .rule-tag{display:inline-block;background:rgba(8,145,178,.15);color:var(--mint);font-size:10px;padding:2px 8px;border-radius:8px;margin-bottom:8px;font-weight:600}
+.msg.bot .content{color:var(--text)}
+.msg.bot .content strong{color:var(--mint)}
+.msg.bot .content p{margin:6px 0}
+.msg.bot .meta{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--dim);display:flex;gap:12px;flex-wrap:wrap}
+.msg.bot .meta span{display:flex;align-items:center;gap:4px}
+.msg.bot .confidence{padding:1px 6px;border-radius:4px;font-weight:600;font-size:10px}
+.conf-high{background:rgba(16,185,129,.15);color:var(--green)}
+.conf-medium{background:rgba(245,158,11,.15);color:var(--orange)}
+.conf-none{background:rgba(239,68,68,.15);color:var(--red)}
+
+.msg.system{background:rgba(8,145,178,.1);border:1px dashed var(--teal);color:var(--dim);align-self:center;text-align:center;font-size:13px;max-width:500px}
+.msg.error{background:rgba(239,68,68,.1);border:1px solid var(--red);color:var(--red);align-self:center;text-align:center;font-size:13px}
+
+.context-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-top:6px;overflow:hidden}
+.context-toggle{width:100%;padding:8px 12px;background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:center;gap:6px}
+.context-toggle:hover{color:var(--text)}
+.context-toggle .arrow{transition:transform .2s;font-size:8px}
+.context-toggle.open .arrow{transform:rotate(90deg)}
+.context-body{display:none;padding:8px 12px;font-family:'Courier New',monospace;font-size:11px;color:var(--dim);white-space:pre-wrap;border-top:1px solid var(--border);max-height:200px;overflow-y:auto}
+.context-body.show{display:block}
+
+.input-area{background:var(--surface);border-top:1px solid var(--border);padding:16px 24px;display:flex;gap:12px}
+.input-area input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border .2s}
+.input-area input:focus{border-color:var(--teal)}
+.input-area input::placeholder{color:var(--dim)}
+.input-area button{background:var(--teal);color:var(--white);border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;font-family:inherit}
+.input-area button:hover{opacity:.9}
+.input-area button:disabled{opacity:.5;cursor:not-allowed}
+
+.examples{padding:24px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.examples button{background:var(--surface);border:1px solid var(--border);color:var(--dim);padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer;transition:.2s;font-family:inherit}
+.examples button:hover{border-color:var(--teal);color:var(--text)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.loading{display:flex;gap:4px;padding:4px 0}
+.loading span{width:6px;height:6px;background:var(--dim);border-radius:50%;animation:bounce .6s infinite alternate}
+.loading span:nth-child(2){animation-delay:.2s}
+.loading span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{to{opacity:.3;transform:translateY(-4px)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>G&A Rules Engine</h1>
+  <span class="tag">POC</span>
+  <div class="status" id="status"><span class="dot"></span> Connected</div>
+</header>
+
+<div class="chat-area" id="chat">
+  <div class="msg system">
+    Ask a question about filing a grievance or appeal. The system will extract your member details,
+    evaluate business rules, and return the correct instructions.
+  </div>
+</div>
+
+<div class="examples" id="examples">
+  <button onclick="askExample(this)">I'm a member in Virginia with FEHBP and want to file a grievance</button>
+  <button onclick="askExample(this)">I'm a broker for a Federal Employee account in California</button>
+  <button onclick="askExample(this)">How do I file an expedited appeal in Virginia?</button>
+  <button onclick="askExample(this)">I have a National account in Texas, need to submit a written grievance</button>
+  <button onclick="askExample(this)">I'm a member with a fully insured plan in Nevada</button>
+  <button onclick="askExample(this)">SHBP member in Georgia wants to file a grievance</button>
+</div>
+
+<div class="input-area">
+  <input type="text" id="input" placeholder="Ask about filing a grievance or appeal..."
+         onkeydown="if(event.key==='Enter')send()" autofocus>
+  <button id="sendBtn" onclick="send()">Send</button>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const examples = document.getElementById('examples');
+
+function askExample(btn) {
+  input.value = btn.textContent;
+  send();
+}
+
+function addMsg(type, html, meta) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.innerHTML = html;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function createContextPanel(data) {
+  const panel = document.createElement('div');
+  panel.className = 'context-panel';
+  panel.innerHTML = `
+    <button class="context-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')">
+      <span class="arrow">▶</span> View extracted context & rule details
+    </button>
+    <div class="context-body">${JSON.stringify(data, null, 2)}</div>
+  `;
+  return panel;
+}
+
+async function send() {
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  sendBtn.disabled = true;
+  examples.style.display = 'none';
+
+  addMsg('user', msg);
+
+  const loader = addMsg('bot', '<div class="loading"><span></span><span></span><span></span></div>');
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    let html = '';
+
+    if (data.rule_matched) {
+      html += `<span class="rule-tag">Rule: ${data.rule_matched}</span> `;
+      html += `<span class="rule-tag">${data.rule_name || ''}</span>`;
+    }
+
+    html += `<div class="content">${data.message_html}</div>`;
+
+    const conf = data.confidence || 'none';
+    html += `<div class="meta">`;
+    html += `<span>Confidence: <span class="confidence conf-${conf}">${conf.toUpperCase()}</span></span>`;
+    if (data.rule_matched) html += `<span>Rule: ${data.rule_matched}</span>`;
+    html += `</div>`;
+
+    loader.innerHTML = html;
+
+    // Add expandable context panel
+    const panel = createContextPanel({
+      extracted_context: data.extracted_context,
+      data_sources: data.data_sources_resolved,
+      rule_matched: data.rule_matched,
+    });
+    loader.appendChild(panel);
+
+  } catch (err) {
+    loader.className = 'msg error';
+    loader.innerHTML = `Error: ${err.message}. Make sure the server is running.`;
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// Check health on load
+fetch('/api/health').then(r => r.json()).then(d => {
+  document.getElementById('status').innerHTML = `
+    <span class="dot" style="background:${d.openai_configured ? 'var(--green)' : 'var(--orange)'}"></span>
+    ${d.rules_loaded} rules | ${d.messages_loaded} messages | OpenAI: ${d.openai_configured ? 'ON' : 'OFF (fallback mode)'}
+  `;
+}).catch(() => {
+  document.getElementById('status').innerHTML = '<span class="dot" style="background:var(--red)"></span> Disconnected';
+});
+</script>
+</body>
+</html>

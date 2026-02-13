@@ -1,0 +1,1021 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "source": "Pega G&A WHEN Rules Migration (G_A_messages_With_When_rules.xlsx)",
+    "eval_mode": "first_match",
+    "updated": "2025-02-12",
+    "total_rules": 22,
+    "format_note": "JSON for logic + Markdown files for messages. Messages referenced by message_ref field."
+  },
+  "data_sources": {
+    "fehbp_address": {
+      "datapage": "D_FEHBPCaseandAddressData",
+      "lookup": {
+        "CaseNumber": "Policy.GroupNumber"
+      },
+      "returns": "MailingAddress",
+      "response_properties": [
+        "AddressHeader",
+        "AddressLine1",
+        "AddressLine2",
+        "Department"
+      ]
+    },
+    "group_details": {
+      "datapage": "D_GroupDetails",
+      "api": {
+        "connector": "ApexWGSGroupDetails",
+        "method": "POST",
+        "endpoint": "https://uat.api.sydneyassociate.ps.awsdns.internal.das/v2/group/details",
+        "headers": {
+          "Content-Type": "application/json",
+          "apikey": "${env.APEX_API_KEY}"
+        }
+      },
+      "lookup": {
+        "GroupID": "Policy.GroupNumber",
+        "SourceSystemInd": "Policy.SourceSystemId",
+        "SubGroupID": "Policy.ProductGroupNumber",
+        "SubscriberID": "Subscriber.EID"
+      },
+      "returns": "FundingTypeCode"
+    },
+    "account_type": {
+      "datapage": "D_AccountType",
+      "lookup": {
+        "CaseNumber": "GroupNumber"
+      },
+      "returns": "AccountType"
+    }
+  },
+  "condition_templates": {
+    "not_shbp_not_ga_not_member": {
+      "all": [
+        {
+          "source": "account_type",
+          "field": "AccountType",
+          "op": "neq",
+          "val": "SHBP"
+        },
+        {
+          "field": "Primary.PolicyState",
+          "op": "not_in",
+          "val": [
+            "GA",
+            ""
+          ]
+        },
+        {
+          "field": "HCCustomerType",
+          "op": "neq",
+          "val": "member"
+        }
+      ]
+    },
+    "is_shbp_ga_member": {
+      "all": [
+        {
+          "source": "account_type",
+          "field": "AccountType",
+          "op": "eq",
+          "val": "SHBP"
+        },
+        {
+          "field": "Primary.PolicyState",
+          "op": "in",
+          "val": [
+            "GA",
+            ""
+          ]
+        },
+        {
+          "field": "HCCustomerType",
+          "op": "eq",
+          "val": "member"
+        }
+      ]
+    },
+    "nv_provider_exception": {
+      "all": [
+        {
+          "field": "ParentName",
+          "op": "eq",
+          "val": "Provider"
+        },
+        {
+          "field": "Policy.PolicyState",
+          "op": "eq",
+          "val": "NV"
+        },
+        {
+          "field": "Policy.FinCompanyCode",
+          "op": "in",
+          "val": [
+            "522C",
+            "525C"
+          ]
+        },
+        {
+          "field": "Policy.CoverageTypeCode",
+          "op": "eq",
+          "val": "MED"
+        },
+        {
+          "field": "FundingType",
+          "op": "eq",
+          "val": "Fully Insured"
+        }
+      ]
+    },
+    "not_nv_provider": {
+      "all": [
+        {
+          "field": "ParentName",
+          "op": "neq",
+          "val": "Provider"
+        },
+        {
+          "field": "Policy.PolicyState",
+          "op": "neq",
+          "val": "NV"
+        },
+        {
+          "field": "Policy.FinCompanyCode",
+          "op": "not_in",
+          "val": [
+            "522C",
+            "525C"
+          ]
+        },
+        {
+          "field": "Policy.CoverageTypeCode",
+          "op": "neq",
+          "val": "MED"
+        }
+      ]
+    },
+    "is_national_account": {
+      "any": [
+        {
+          "field": "Policy.BusinessUnit",
+          "op": "eq",
+          "val": "National"
+        },
+        {
+          "all": [
+            {
+              "field": "Policy.BusinessUnit",
+              "op": "is_empty"
+            },
+            {
+              "field": "pyOrigUserWorkgroup",
+              "op": "eq",
+              "val": "NationalCustomerServiceWG"
+            }
+          ]
+        }
+      ]
+    },
+    "not_excluded_state_or_group": {
+      "all": [
+        {
+          "field": "Policy.PolicyState",
+          "op": "not_in",
+          "val": [
+            "MO",
+            "CA",
+            "GA",
+            "CO"
+          ]
+        },
+        {
+          "field": "Policy.GroupNumber",
+          "op": "not_in",
+          "val": [
+            "W61463",
+            "W61511",
+            "277579",
+            "GA9467",
+            "196647"
+          ]
+        }
+      ]
+    },
+    "is_fully_insured_or_nv_provider": {
+      "any": [
+        {
+          "source": "group_details",
+          "field": "FundingTypeCode",
+          "op": "in",
+          "val": [
+            "E",
+            "G",
+            "H",
+            "K",
+            "9"
+          ]
+        },
+        {
+          "all": [
+            {
+              "field": "Policy.PolicyState",
+              "op": "eq",
+              "val": "NV"
+            },
+            {
+              "field": "Policy.FinCompanyCode",
+              "op": "in",
+              "val": [
+                "522C",
+                "525C"
+              ]
+            },
+            {
+              "field": "Policy.CoverageTypeCode",
+              "op": "eq",
+              "val": "MED"
+            },
+            {
+              "field": "HCCustomerType",
+              "op": "eq",
+              "val": "member"
+            },
+            {
+              "field": "ParentName",
+              "op": "eq",
+              "val": "Provider"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "R001_FEHBP_MEMBER",
+      "name": "FEHBP Account - Member",
+      "priority": 10,
+      "active": true,
+      "tags": [
+        "fehbp",
+        "member",
+        "written"
+      ],
+      "pega_row": 0,
+      "conditions": {
+        "all": [
+          {
+            "source": "fehbp_address",
+            "op": "is_not_empty"
+          },
+          {
+            "field": "HCCustomerType",
+            "op": "eq",
+            "val": "Member"
+          }
+        ]
+      },
+      "message_ref": "FEHBP_MEMBER",
+      "placeholders": [
+        "Policy.PolicyState",
+        "fehbp_address.MailingAddress"
+      ]
+    },
+    {
+      "id": "R002_FEHBP_BROKER",
+      "name": "FEHBP Account - Broker",
+      "priority": 11,
+      "active": true,
+      "tags": [
+        "fehbp",
+        "broker",
+        "written"
+      ],
+      "pega_row": 1,
+      "conditions": {
+        "all": [
+          {
+            "source": "fehbp_address",
+            "op": "is_not_empty"
+          },
+          {
+            "field": "HCCustomerType",
+            "op": "eq",
+            "val": "Broker"
+          }
+        ]
+      },
+      "message_ref": "FEHBP_BROKER",
+      "placeholders": [
+        "Policy.PolicyState",
+        "fehbp_address.MailingAddress"
+      ]
+    },
+    {
+      "id": "R003_NATIONAL_NON_CA",
+      "name": "National Account - Non-CA State",
+      "priority": 20,
+      "active": true,
+      "tags": [
+        "national",
+        "written",
+        "anthem_address"
+      ],
+      "pega_row": 2,
+      "conditions": {
+        "all": [
+          {
+            "field": "Policy.PolicyState",
+            "op": "neq",
+            "val": "CA"
+          },
+          {
+            "use_template": "is_national_account"
+          },
+          {
+            "field": "IsASO",
+            "op": "eq",
+            "val": false
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          }
+        ]
+      },
+      "message_ref": "NATIONAL_NON_CA",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R004_VA_EXPEDITED",
+      "name": "VA Expedited Appeal",
+      "priority": 15,
+      "active": true,
+      "tags": [
+        "va",
+        "expedited",
+        "fax",
+        "written"
+      ],
+      "pega_row": 3,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsVAExpedited",
+            "op": "exists_with_value"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_not_empty"
+          }
+        ]
+      },
+      "message_ref": "VA_EXPEDITED",
+      "placeholders": []
+    },
+    {
+      "id": "R005_FULLY_INSURED_NOT_SHBP",
+      "name": "Fully Insured - General Written G&A (Consult EOC)",
+      "priority": 30,
+      "active": true,
+      "tags": [
+        "fully_insured",
+        "eoc",
+        "written"
+      ],
+      "pega_row": 4,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "field": "IsASO",
+            "op": "neq",
+            "val": true
+          },
+          {
+            "field": "IsVAExpedited",
+            "op": "is_empty_or_false"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "field": "HideAccessDocument",
+            "op": "neq",
+            "val": true
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          },
+          {
+            "use_template": "not_nv_provider"
+          }
+        ]
+      },
+      "message_ref": "CONSULT_EOC",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R006_NV_PROVIDER_EOC",
+      "name": "NV Provider - Check EOC for Written/Verbal",
+      "priority": 31,
+      "active": true,
+      "tags": [
+        "nv",
+        "provider",
+        "eoc",
+        "verbal_possible"
+      ],
+      "pega_row": 5,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          },
+          {
+            "use_template": "nv_provider_exception"
+          }
+        ]
+      },
+      "message_ref": "NV_EOC_CHECK",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R007_SHBP_WRITTEN",
+      "name": "SHBP Contracts - Written Required",
+      "priority": 32,
+      "active": true,
+      "tags": [
+        "shbp",
+        "ga",
+        "written"
+      ],
+      "pega_row": 6,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "use_template": "is_shbp_ga_member"
+          }
+        ]
+      },
+      "message_ref": "SHBP_WRITTEN",
+      "placeholders": []
+    },
+    {
+      "id": "R008_EOC_DOCUMENT_REF",
+      "name": "EOC Document Reference",
+      "priority": 33,
+      "active": true,
+      "tags": [
+        "eoc",
+        "document"
+      ],
+      "pega_row": 7,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          }
+        ]
+      },
+      "message_ref": "EOC_DOCUMENT_REF",
+      "message_type": "document_reference",
+      "placeholders": []
+    },
+    {
+      "id": "R009_VERBAL_GA_INTRO",
+      "name": "Verbal G&A Allowed - Intro",
+      "priority": 50,
+      "active": true,
+      "tags": [
+        "verbal",
+        "eoc"
+      ],
+      "pega_row": 8,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          }
+        ]
+      },
+      "message_ref": "VERBAL_GA_INTRO",
+      "placeholders": []
+    },
+    {
+      "id": "R010_VERBAL_NOT_ALLOWED",
+      "name": "Verbal G&A Not Allowed - Ask for Written",
+      "priority": 51,
+      "active": true,
+      "tags": [
+        "verbal",
+        "written",
+        "question"
+      ],
+      "pega_row": 9,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          },
+          {
+            "field": "IsVerbalGandAAllowed",
+            "op": "eq",
+            "val": "No"
+          }
+        ]
+      },
+      "message_ref": "VERBAL_NOT_ALLOWED",
+      "placeholders": []
+    },
+    {
+      "id": "R011_SHBP_WRITTEN_CHECK",
+      "name": "SHBP - Check Written Documentation",
+      "priority": 52,
+      "active": true,
+      "tags": [
+        "shbp",
+        "written",
+        "question"
+      ],
+      "pega_row": 10,
+      "conditions": {
+        "all": [
+          {
+            "use_template": "is_fully_insured_or_nv_provider"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          },
+          {
+            "use_template": "is_shbp_ga_member"
+          }
+        ]
+      },
+      "message_ref": "SHBP_WRITTEN_CHECK",
+      "placeholders": []
+    },
+    {
+      "id": "R012_ATTACH_PROMPT",
+      "name": "Written G&A - Attachment Prompt",
+      "priority": 70,
+      "active": true,
+      "tags": [
+        "attachment",
+        "written"
+      ],
+      "pega_row": 11,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "eq",
+            "val": "Yes"
+          }
+        ]
+      },
+      "message_ref": "ATTACH_PROMPT",
+      "placeholders": []
+    },
+    {
+      "id": "R013_ATTACH_REQUIRED",
+      "name": "Written G&A - Attachment Required",
+      "priority": 71,
+      "active": true,
+      "tags": [
+        "attachment",
+        "required",
+        "validation"
+      ],
+      "pega_row": 12,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "eq",
+            "val": "Yes"
+          },
+          {
+            "field": "NoAttachmentforGAndA",
+            "op": "eq",
+            "val": "true"
+          }
+        ]
+      },
+      "message_ref": "ATTACH_REQUIRED",
+      "placeholders": []
+    },
+    {
+      "id": "R014_PORTAL_SUBMISSION",
+      "name": "Portal Submission Available",
+      "priority": 72,
+      "active": true,
+      "tags": [
+        "portal",
+        "online"
+      ],
+      "pega_row": 13,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "is_not_empty"
+          }
+        ]
+      },
+      "message_ref": "PORTAL_SUBMISSION",
+      "placeholders": []
+    },
+    {
+      "id": "R015_NV_PROVIDER_NATIONAL_ADDR",
+      "name": "NV Provider - National Written G&A Address",
+      "priority": 80,
+      "active": true,
+      "tags": [
+        "nv",
+        "provider",
+        "national",
+        "written",
+        "anthem_address"
+      ],
+      "pega_row": 14,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "is_not_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          },
+          {
+            "use_template": "nv_provider_exception"
+          }
+        ]
+      },
+      "message_ref": "NV_PROVIDER_NATIONAL_ADDR",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R016_CA_EMPTY_COMPANY",
+      "name": "CA State - Empty Company Code - Check EOC",
+      "priority": 81,
+      "active": true,
+      "tags": [
+        "ca",
+        "eoc",
+        "written"
+      ],
+      "pega_row": 15,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "is_not_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          },
+          {
+            "use_template": "not_nv_provider"
+          },
+          {
+            "field": "Policy.PolicyState",
+            "op": "eq",
+            "val": "CA"
+          },
+          {
+            "field": "Policy.AntmCompanyCodeName",
+            "op": "is_empty"
+          }
+        ]
+      },
+      "message_ref": "CA_CHECK_EOC",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R017_STATE_WITH_COMPANY",
+      "name": "State - Send to Company Name",
+      "priority": 82,
+      "active": true,
+      "tags": [
+        "state",
+        "company",
+        "written"
+      ],
+      "pega_row": 16,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "is_not_empty"
+          },
+          {
+            "field": "Policy.AntmCompanyCodeName",
+            "op": "is_not_empty"
+          },
+          {
+            "use_template": "not_excluded_state_or_group"
+          }
+        ]
+      },
+      "message_ref": "STATE_WITH_COMPANY",
+      "placeholders": [
+        "Policy.PolicyState",
+        "Policy.FinCompanyName"
+      ]
+    },
+    {
+      "id": "R018_NATIONAL_WRITTEN",
+      "name": "National Account - Written G&A - Anthem Address",
+      "priority": 83,
+      "active": true,
+      "tags": [
+        "national",
+        "written",
+        "anthem_address"
+      ],
+      "pega_row": 17,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "is_not_empty"
+          },
+          {
+            "use_template": "not_shbp_not_ga_not_member"
+          },
+          {
+            "use_template": "not_nv_provider"
+          },
+          {
+            "field": "Policy.PolicyState",
+            "op": "neq",
+            "val": "CA"
+          },
+          {
+            "use_template": "is_national_account"
+          }
+        ]
+      },
+      "message_ref": "NATIONAL_ANTHEM_ADDR",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R019_SHBP_NO_DOCS",
+      "name": "SHBP - No Written Docs - Create Promised Action",
+      "priority": 84,
+      "active": true,
+      "tags": [
+        "shbp",
+        "promised_action"
+      ],
+      "pega_row": 18,
+      "conditions": {
+        "all": [
+          {
+            "field": "IsGandAInWritingAllowed",
+            "op": "is_not_empty"
+          },
+          {
+            "use_template": "is_shbp_ga_member"
+          }
+        ]
+      },
+      "message_ref": "SHBP_PROMISED_ACTION",
+      "placeholders": []
+    },
+    {
+      "id": "R020_IND_EXCHANGE_WITH_COMPANY",
+      "name": "Individual/Exchange - With Company Name",
+      "priority": 100,
+      "active": true,
+      "tags": [
+        "individual",
+        "exchange",
+        "company",
+        "written"
+      ],
+      "pega_row": 19,
+      "conditions": {
+        "all": [
+          {
+            "any": [
+              {
+                "field": "Policy.MBUCode",
+                "op": "eq",
+                "val": "IND"
+              },
+              {
+                "all": [
+                  {
+                    "field": "Policy.ExchangeIndCode",
+                    "op": "in",
+                    "val": [
+                      "NA",
+                      ""
+                    ]
+                  },
+                  {
+                    "field": "Primary.Guest.IsGuestCaller",
+                    "op": "eq",
+                    "val": false
+                  },
+                  {
+                    "field": "Policy.BusinessUnit",
+                    "op": "neq",
+                    "val": "National"
+                  },
+                  {
+                    "field": "Policy.MBUCode",
+                    "op": "not_in",
+                    "val": [
+                      "LG",
+                      "NATL"
+                    ]
+                  },
+                  {
+                    "field": "Policy.PolicyState",
+                    "op": "in",
+                    "val": [
+                      "MO",
+                      "WI",
+                      "NV"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "field": "Policy.AntmCompanyCodeName",
+            "op": "is_not_empty"
+          },
+          {
+            "use_template": "not_excluded_state_or_group"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          }
+        ]
+      },
+      "message_ref": "IND_WITH_COMPANY",
+      "placeholders": [
+        "Policy.PolicyState",
+        "Policy.FinCompanyName"
+      ]
+    },
+    {
+      "id": "R021_IND_EXCHANGE_EMPTY_COMPANY",
+      "name": "Individual/Exchange - Empty Company Code",
+      "priority": 101,
+      "active": true,
+      "tags": [
+        "individual",
+        "exchange",
+        "eoc"
+      ],
+      "pega_row": 20,
+      "conditions": {
+        "all": [
+          {
+            "any": [
+              {
+                "field": "Policy.MBUCode",
+                "op": "eq",
+                "val": "IND"
+              },
+              {
+                "all": [
+                  {
+                    "field": "Policy.ExchangeIndCode",
+                    "op": "in",
+                    "val": [
+                      "NA",
+                      ""
+                    ]
+                  },
+                  {
+                    "field": "Policy.PolicyState",
+                    "op": "in",
+                    "val": [
+                      "MO",
+                      "WI",
+                      "NV"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "field": "Policy.AntmCompanyCodeName",
+            "op": "is_empty"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          }
+        ]
+      },
+      "message_ref": "IND_CHECK_EOC",
+      "placeholders": [
+        "Policy.PolicyState"
+      ]
+    },
+    {
+      "id": "R022_IND_EOC_DOC_REF",
+      "name": "Individual/Exchange - EOC Document Reference",
+      "priority": 102,
+      "active": true,
+      "tags": [
+        "individual",
+        "eoc",
+        "document"
+      ],
+      "pega_row": 21,
+      "conditions": {
+        "all": [
+          {
+            "field": "Policy.MBUCode",
+            "op": "eq",
+            "val": "IND"
+          },
+          {
+            "field": "Policy.AntmCompanyCodeName",
+            "op": "is_empty"
+          },
+          {
+            "source": "fehbp_address",
+            "op": "is_empty"
+          }
+        ]
+      },
+      "message_ref": "EOC_DOCUMENT_REF",
+      "message_type": "document_reference",
+      "placeholders": []
+    }
+  ],
+  "operators": {
+    "eq": "Equals",
+    "neq": "Not equals",
+    "in": "Value is in list",
+    "not_in": "Value is not in list",
+    "is_empty": "Field is null or empty string",
+    "is_not_empty": "Field has a value",
+    "exists_with_value": "Field exists and has non-empty value",
+    "is_empty_or_false": "Field is empty, null, or false"
+  }
+}

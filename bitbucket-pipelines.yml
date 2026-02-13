@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────
+# Bitbucket Pipelines — G&A Rules Engine POC
+# ─────────────────────────────────────────────
+# Triggers:
+#   - Every push: lint + unit tests
+#   - Push to main: deploy to staging
+#
+# Required Repository Variables (Settings → Pipelines → Variables):
+#   OPENAI_API_KEY    (secured)
+#   STAGING_HOST      (e.g., your-server.internal.com)
+#   STAGING_SSH_KEY   (secured)
+# ─────────────────────────────────────────────
+
+image: python:3.11
+
+definitions:
+  caches:
+    pip: ~/.cache/pip
+
+  steps:
+    - step: &lint-and-test
+        name: Lint & Test
+        caches:
+          - pip
+        script:
+          - pip install -r requirements.txt
+          - pip install flake8
+          # Lint
+          - flake8 engine/ api/ --max-line-length=120 --ignore=E501,W503
+          # Run unit tests (no OpenAI key needed — uses fallback mode)
+          - pytest tests/ -v --tb=short
+        artifacts:
+          - test-reports/**
+
+    - step: &validate-rules
+        name: Validate Rules JSON
+        script:
+          - pip install jsonschema
+          - python -c "
+            import json;
+            rules = json.load(open('rules/ga_rules.json'));
+            assert len(rules['rules']) >= 22, f'Expected 22+ rules, got {len(rules[\"rules\"])}';
+            assert all(r.get('id') for r in rules['rules']), 'All rules must have an id';
+            assert all(r.get('message_ref') for r in rules['rules']), 'All rules must have message_ref';
+            print(f'✓ Validated {len(rules[\"rules\"])} rules');
+            "
+          - python -c "
+            from pathlib import Path;
+            msgs = list(Path('messages').glob('*.md'));
+            assert len(msgs) >= 21, f'Expected 21+ messages, got {len(msgs)}';
+            print(f'✓ Found {len(msgs)} message templates');
+            "
+
+pipelines:
+  default:
+    - step: *lint-and-test
+    - step: *validate-rules
+
+  branches:
+    main:
+      - step: *lint-and-test
+      - step: *validate-rules
+      - step:
+          name: Deploy to Staging
+          deployment: staging
+          script:
+            - echo "Deploying to staging..."
+            # Add your deployment commands here
+            # Example: rsync, docker push, etc.
+            - echo "✓ Deployed successfully"
+
+  pull-requests:
+    '**':
+      - step: *lint-and-test
+      - step: *validate-rules
